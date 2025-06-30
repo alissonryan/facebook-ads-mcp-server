@@ -1,0 +1,155 @@
+{
+  "dxt_version": "0.1",
+  "name": "facebook-ads-mcp-server",
+  "display_name": "Facebook Ads MCP Server",
+  "version": "0.1.0",
+  "description": "A Python MCP server for Facebook Ads API integration",
+  "long_description": "This extension provides comprehensive Facebook Ads management capabilities through a Python MCP server. It enables programmatic access to Facebook Ads data and management features, including account management, campaign insights, ad set operations, and performance analytics through the Facebook Graph API.",
+  "author": {
+    "name": "GoMarble AI",
+    "email": "support@gomarble.ai",
+    "url": "https://github.com/gomarble-ai"
+  },
+  "icon": "icon.png",
+  "server": {
+    "type": "python",
+    "entry_point": "server.py",
+    "mcp_config": {
+      "command": "python3",
+      "args": [
+        "${__dirname}/server.py",
+        "--fb-token",
+        "${user_config.facebook_access_token}"
+      ],
+      "env": {
+        "DEBUG": "${user_config.debug_mode}",
+        "PYTHONPATH": "${__dirname}/lib"
+      },
+      "cwd": "${__dirname}"
+    }
+  },
+  "tools": [
+    {
+      "name": "list_ad_accounts",
+      "description": "Lists ad accounts linked to the Facebook access token"
+    },
+    {
+      "name": "get_details_of_ad_account",
+      "description": "Retrieves details for a specific ad account"
+    },
+    {
+      "name": "get_adaccount_insights",
+      "description": "Retrieves performance insights for an ad account"
+    },
+    {
+      "name": "get_campaign_insights",
+      "description": "Retrieves performance insights for a campaign"
+    },
+    {
+      "name": "get_adset_insights",
+      "description": "Retrieves performance insights for an ad set"
+    },
+    {
+      "name": "get_ad_insights",
+      "description": "Retrieves performance insights for an ad"
+    },
+    {
+      "name": "fetch_pagination_url",
+      "description": "Fetches data from a pagination URL"
+    },
+    {
+      "name": "get_ad_creative_by_id",
+      "description": "Retrieves details for a specific ad creative"
+    },
+    {
+      "name": "get_ad_creatives_by_ad_id",
+      "description": "Retrieves creatives associated with an ad"
+    },
+    {
+      "name": "get_ad_by_id",
+      "description": "Retrieves details for a specific ad"
+    },
+    {
+      "name": "get_ads_by_adaccount",
+      "description": "Retrieves ads within an ad account"
+    },
+    {
+      "name": "get_ads_by_campaign",
+      "description": "Retrieves ads within a campaign"
+    },
+    {
+      "name": "get_ads_by_adset",
+      "description": "Retrieves ads within an ad set"
+    },
+    {
+      "name": "get_adset_by_id",
+      "description": "Retrieves details for a specific ad set"
+    },
+    {
+      "name": "get_adsets_by_ids",
+      "description": "Retrieves details for multiple ad sets by their IDs"
+    },
+    {
+      "name": "get_adsets_by_adaccount",
+      "description": "Retrieves ad sets within an ad account"
+    },
+    {
+      "name": "get_adsets_by_campaign",
+      "description": "Retrieves ad sets within a campaign"
+    },
+    {
+      "name": "get_campaign_by_id",
+      "description": "Retrieves details for a specific campaign"
+    },
+    {
+      "name": "get_campaigns_by_adaccount",
+      "description": "Retrieves campaigns within an ad account"
+    },
+    {
+      "name": "get_activities_by_adaccount",
+      "description": "Retrieves change history for an ad account"
+    },
+    {
+      "name": "get_activities_by_adset",
+      "description": "Retrieves change history for an ad set"
+    }
+  ],
+  "keywords": [
+    "facebook",
+    "ads",
+    "marketing",
+    "analytics",
+    "advertising",
+    "campaigns",
+    "insights",
+    "social media"
+  ],
+  "license": "MIT",
+  "user_config": {
+    "facebook_access_token": {
+      "type": "string",
+      "title": "Facebook Access Token",
+      "description": "Facebook User Access Token with necessary permissions (e.g., ads_read)",
+      "required": true,
+      "sensitive": true
+    },
+    "debug_mode": {
+      "type": "boolean",
+      "title": "Debug Mode",
+      "description": "Enable debug output",
+      "default": false,
+      "required": false
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
+    "runtimes": {
+      "python": ">=3.10.0 <4"
+    }
+  }
+}

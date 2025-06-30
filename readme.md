@@ -16,6 +16,10 @@ For a simpler setup experience, we offer ready-to-use installers:
 
 👉 **Slack Community -** [AI in Ads](https://join.slack.com/t/ai-in-ads/shared_invite/zt-379x2i0nk-W3VSAh2c6uddFgxxksA2oQ)
 
+## Try Google ads mcp server also
+
+👉 **Google Ads MCP -** [Google Ads MCP](https://github.com/gomarble-ai/google-ads-mcp-server)
+
 ### What It Does
 
 - Installs and configures the MCP server locally
