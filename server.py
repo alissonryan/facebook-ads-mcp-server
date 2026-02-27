@@ -120,6 +120,49 @@ def _fetch_edge(parent_id: str, edge_name: str, **kwargs) -> Dict:
     return _make_graph_api_call(url, params)
 
 
+def _make_graph_api_post(url: str, data: Dict[str, Any]) -> Dict:
+    """Makes a POST request to the Facebook Graph API for creating/updating objects."""
+    try:
+        response = requests.post(url, data=data)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Error making Graph API POST to {url}: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_detail = e.response.json()
+                return {"error": error_detail}
+            except Exception:
+                pass
+        raise
+
+
+def _make_graph_api_delete(url: str, params: Dict[str, Any]) -> Dict:
+    """Makes a DELETE request to the Facebook Graph API for archiving/deleting objects."""
+    try:
+        response = requests.delete(url, params=params)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Error making Graph API DELETE to {url}: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            try:
+                error_detail = e.response.json()
+                return {"error": error_detail}
+            except Exception:
+                pass
+        raise
+
+
+def _make_graph_api_search(search_type: str, params: Dict[str, Any]) -> Dict:
+    """Makes a GET request to the Facebook Graph API /search endpoint."""
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/search"
+    params['access_token'] = access_token
+    params['type'] = search_type
+    return _make_graph_api_call(url, params)
+
+
 def _build_insights_params(
     params: Dict[str, Any],
     fields: Optional[List[str]] = None,
@@ -2291,7 +2334,1107 @@ def get_activities_by_adset(
     return _make_graph_api_call(url, params)
 
 
+# --- Targeting & Audience Search Tools ---
+
+@mcp.tool()
+def search_interests(
+    query: str,
+    limit: Optional[int] = 25,
+    locale: Optional[str] = None
+) -> Dict:
+    """Search for ad interest targeting options by keyword.
+
+    Finds valid interest IDs for use in targeting_spec when creating ad sets.
+    
+    Args:
+        query: Search term to find interests (e.g., 'fitness', 'cooking', 'technology').
+        limit: Maximum results to return. Default: 25.
+        locale: Locale for results (e.g., 'en_US', 'pt_BR'). Default: API default.
+    
+    Returns:
+        Dict with 'data' list containing interest objects with 'id', 'name', 'audience_size_lower_bound',
+        'audience_size_upper_bound', 'path', 'description', 'topic'.
+    
+    Example:
+        ```python
+        interests = search_interests(query="fitness", limit=10)
+        # Use the returned IDs in targeting_spec: {"interests": [{"id": "123", "name": "Fitness"}]}
+        ```
+    """
+    params = {'q': query}
+    if limit:
+        params['limit'] = limit
+    if locale:
+        params['locale'] = locale
+    return _make_graph_api_search('adinterest', params)
+
+
+@mcp.tool()
+def search_interest_suggestions(
+    interest_list: List[str],
+    limit: Optional[int] = 25,
+    locale: Optional[str] = None
+) -> Dict:
+    """Get suggested interests related to given interest IDs.
+
+    Useful for expanding targeting options. Provide existing interest IDs to get related suggestions.
+    
+    Args:
+        interest_list: List of interest IDs to base suggestions on (e.g., ['6003139266461']).
+        limit: Maximum results. Default: 25.
+        locale: Locale for results (e.g., 'pt_BR').
+    
+    Returns:
+        Dict with 'data' list of suggested interest objects.
+    
+    Example:
+        ```python
+        suggestions = search_interest_suggestions(interest_list=["6003139266461"])
+        ```
+    """
+    params = {'interest_list': json.dumps(interest_list)}
+    if limit:
+        params['limit'] = limit
+    if locale:
+        params['locale'] = locale
+    return _make_graph_api_search('adinterestsuggestion', params)
+
+
+@mcp.tool()
+def search_behaviors(
+    locale: Optional[str] = None
+) -> Dict:
+    """List all available behavior targeting categories.
+
+    Returns behaviors like 'Purchase behavior', 'Digital activities', 'Travel', etc.
+    
+    Args:
+        locale: Locale for results (e.g., 'pt_BR').
+    
+    Returns:
+        Dict with 'data' list of behavior targeting options with 'id', 'name', 'description',
+        'audience_size_lower_bound', 'audience_size_upper_bound'.
+    """
+    params = {'class': 'behaviors'}
+    if locale:
+        params['locale'] = locale
+    return _make_graph_api_search('adTargetingCategory', params)
+
+
+@mcp.tool()
+def search_demographics(
+    locale: Optional[str] = None
+) -> Dict:
+    """List all available demographic targeting categories.
+
+    Returns demographics like 'Life events', 'Income', 'Education', 'Industries', etc.
+    
+    Args:
+        locale: Locale for results (e.g., 'pt_BR').
+    
+    Returns:
+        Dict with 'data' list of demographic targeting options.
+    """
+    params = {'class': 'demographics'}
+    if locale:
+        params['locale'] = locale
+    return _make_graph_api_search('adTargetingCategory', params)
+
+
+@mcp.tool()
+def search_geolocations(
+    query: str,
+    location_types: Optional[List[str]] = None,
+    country_code: Optional[str] = None,
+    region_id: Optional[int] = None,
+    limit: Optional[int] = 25,
+    locale: Optional[str] = None
+) -> Dict:
+    """Search for geographic locations for ad targeting.
+
+    Find countries, cities, regions, zip codes, geo markets, and electoral districts.
+    
+    Args:
+        query: Search term (e.g., 'Brazil', 'São Paulo', 'New York').
+        location_types: Filter by type. Options: 'country', 'country_group', 'region',
+            'city', 'zip', 'geo_market', 'electoral_district'. Default: all types.
+        country_code: Filter results to a specific country (e.g., 'BR', 'US').
+        region_id: Filter results to a specific region ID.
+        limit: Maximum results. Default: 25.
+        locale: Locale for results (e.g., 'pt_BR').
+    
+    Returns:
+        Dict with 'data' list of location objects with 'key', 'name', 'type',
+        'country_code', 'supports_region', 'supports_city'.
+    
+    Example:
+        ```python
+        # Search for cities in Brazil
+        cities = search_geolocations(
+            query="São Paulo",
+            location_types=["city"],
+            country_code="BR"
+        )
+        ```
+    """
+    params = {'q': query}
+    if location_types:
+        params['location_types'] = json.dumps(location_types)
+    if country_code:
+        params['country_code'] = country_code
+    if region_id:
+        params['region_id'] = region_id
+    if limit:
+        params['limit'] = limit
+    if locale:
+        params['locale'] = locale
+    return _make_graph_api_search('adgeolocation', params)
+
+
+@mcp.tool()
+def validate_targeting(
+    act_id: str,
+    targeting_spec: Dict
+) -> Dict:
+    """Validate if a targeting specification is valid for an ad account.
+
+    Use this before creating an ad set to ensure the targeting_spec will be accepted.
+    
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        targeting_spec: The targeting specification dict to validate.
+    
+    Returns:
+        Dict with validation results. Returns the validated targeting if valid,
+        or error details if invalid.
+    
+    Example:
+        ```python
+        result = validate_targeting(
+            act_id="act_123456789",
+            targeting_spec={
+                "geo_locations": {"countries": ["BR"]},
+                "interests": [{"id": "6003139266461", "name": "Fitness"}],
+                "age_min": 18, "age_max": 65
+            }
+        )
+        ```
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{act_id}/targetingvalidation"
+    params = {
+        'access_token': access_token,
+        'targeting_spec': json.dumps(targeting_spec)
+    }
+    return _make_graph_api_call(url, params)
+
+
+@mcp.tool()
+def get_reach_estimate(
+    act_id: str,
+    targeting_spec: Dict,
+    optimization_goal: Optional[str] = None
+) -> Dict:
+    """Estimate audience size for a given targeting specification.
+
+    Returns estimated reach (lower/upper bounds) before creating an ad set.
+    
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        targeting_spec: The targeting specification dict.
+        optimization_goal: Optional optimization goal (e.g., 'REACH', 'LINK_CLICKS').
+    
+    Returns:
+        Dict with 'data' containing 'users_lower_bound' and 'users_upper_bound'.
+    
+    Example:
+        ```python
+        estimate = get_reach_estimate(
+            act_id="act_123456789",
+            targeting_spec={
+                "geo_locations": {"countries": ["BR"]},
+                "age_min": 25, "age_max": 45
+            }
+        )
+        print(f"Estimated reach: {estimate['data']['users_lower_bound']} - {estimate['data']['users_upper_bound']}")
+        ```
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{act_id}/reachestimate"
+    params = {
+        'access_token': access_token,
+        'targeting_spec': json.dumps(targeting_spec)
+    }
+    if optimization_goal:
+        params['optimization_goal'] = optimization_goal
+    return _make_graph_api_call(url, params)
+
+
+@mcp.tool()
+def get_delivery_estimate(
+    act_id: str,
+    targeting_spec: Dict,
+    optimization_goal: str,
+    daily_budget: Optional[int] = None,
+    lifetime_budget: Optional[int] = None
+) -> Dict:
+    """Get delivery estimates (CPA/CPM/impressions) for a targeting spec and budget.
+
+    Predicts performance metrics before launching a campaign.
+    
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        targeting_spec: The targeting specification dict.
+        optimization_goal: Goal to optimize for (e.g., 'LINK_CLICKS', 'CONVERSIONS',
+            'REACH', 'IMPRESSIONS', 'OFFSITE_CONVERSIONS').
+        daily_budget: Daily budget in cents (e.g., 5000 = $50.00). Provide either this or lifetime_budget.
+        lifetime_budget: Lifetime budget in cents. Provide either this or daily_budget.
+    
+    Returns:
+        Dict with delivery estimates including estimated daily reach, estimated actions, etc.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{act_id}/delivery_estimate"
+    params = {
+        'access_token': access_token,
+        'targeting_spec': json.dumps(targeting_spec),
+        'optimization_goal': optimization_goal
+    }
+    if daily_budget:
+        params['daily_budget'] = daily_budget
+    if lifetime_budget:
+        params['lifetime_budget'] = lifetime_budget
+    return _make_graph_api_call(url, params)
+
+
+@mcp.tool()
+def get_targeting_description(
+    act_id: str,
+    targeting_spec: Dict
+) -> Dict:
+    """Convert a targeting specification into human-readable text.
+
+    Generates a description like "People aged 25-45 in Brazil who like Fitness".
+    
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        targeting_spec: The targeting specification dict to describe.
+    
+    Returns:
+        Dict with 'targetingsentencelines' containing readable text per targeting dimension.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{act_id}/targetingsentencelines"
+    params = {
+        'access_token': access_token,
+        'targeting_spec': json.dumps(targeting_spec)
+    }
+    return _make_graph_api_call(url, params)
+
+
+@mcp.tool()
+def list_custom_audiences(
+    act_id: str,
+    fields: Optional[List[str]] = None,
+    limit: Optional[int] = 25,
+    after: Optional[str] = None,
+    before: Optional[str] = None,
+    business_id: Optional[str] = None
+) -> Dict:
+    """List custom audiences (retargeting audiences) for an ad account.
+
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        fields: Fields to retrieve. Common: 'id', 'name', 'subtype', 'description',
+            'approximate_count_lower_bound', 'approximate_count_upper_bound',
+            'time_created', 'time_updated', 'delivery_status', 'operation_status'.
+        limit: Max results per page. Default: 25.
+        after: Pagination cursor for next page.
+        before: Pagination cursor for previous page.
+        business_id: Optional business ID for filtering.
+    
+    Returns:
+        Dict with 'data' list of custom audience objects and 'paging' info.
+    """
+    return _fetch_edge(
+        parent_id=act_id,
+        edge_name='customaudiences',
+        fields=fields,
+        limit=limit,
+        after=after,
+        before=before,
+        business_id=business_id
+    )
+
+
+@mcp.tool()
+def list_lookalike_audiences(
+    act_id: str,
+    fields: Optional[List[str]] = None,
+    limit: Optional[int] = 25,
+    after: Optional[str] = None,
+    before: Optional[str] = None
+) -> Dict:
+    """List lookalike audiences for an ad account.
+
+    Filters custom audiences to show only LOOKALIKE subtypes.
+    
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        fields: Fields to retrieve. Common: 'id', 'name', 'approximate_count_lower_bound',
+            'approximate_count_upper_bound', 'lookalike_spec', 'delivery_status'.
+        limit: Max results per page. Default: 25.
+        after: Pagination cursor for next page.
+        before: Pagination cursor for previous page.
+    
+    Returns:
+        Dict with 'data' list of lookalike audience objects.
+    """
+    filtering = [{'field': 'subtype', 'operator': 'EQUAL', 'value': 'LOOKALIKE'}]
+    return _fetch_edge(
+        parent_id=act_id,
+        edge_name='customaudiences',
+        fields=fields,
+        filtering=filtering,
+        limit=limit,
+        after=after,
+        before=before
+    )
+
+
+# --- Campaign Management Tools (Write) ---
+
+@mcp.tool()
+def create_campaign(
+    act_id: str,
+    name: str,
+    objective: str,
+    status: str = 'PAUSED',
+    special_ad_categories: Optional[List[str]] = None,
+    daily_budget: Optional[int] = None,
+    lifetime_budget: Optional[int] = None,
+    bid_strategy: Optional[str] = None,
+    buying_type: Optional[str] = None,
+    start_time: Optional[str] = None,
+    stop_time: Optional[str] = None,
+    spend_cap: Optional[int] = None
+) -> Dict:
+    """⚠️ WRITE OPERATION — Create a new Facebook ad campaign.
+
+    Creates a campaign with the specified objective and settings.
+    Campaign is created PAUSED by default for safety.
+    
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        name: Campaign name.
+        objective: Campaign objective. Options: 'OUTCOME_AWARENESS', 'OUTCOME_ENGAGEMENT',
+            'OUTCOME_LEADS', 'OUTCOME_SALES', 'OUTCOME_TRAFFIC', 'OUTCOME_APP_PROMOTION'.
+        status: Initial status. Default: 'PAUSED'. Options: 'ACTIVE', 'PAUSED'.
+        special_ad_categories: Required list. Options: 'EMPLOYMENT', 'HOUSING', 'CREDIT',
+            'ISSUES_ELECTIONS_POLITICS'. Use ['NONE'] if none apply.
+        daily_budget: Daily budget in cents (e.g., 5000 = $50.00).
+        lifetime_budget: Lifetime budget in cents. Cannot use with daily_budget.
+        bid_strategy: Bid strategy. Options: 'LOWEST_COST_WITHOUT_CAP',
+            'LOWEST_COST_WITH_BID_CAP', 'COST_CAP'.
+        buying_type: Buying type. Options: 'AUCTION' (default), 'RESERVED'.
+        start_time: Start time in ISO 8601 format.
+        stop_time: Stop time in ISO 8601 format (required for lifetime_budget).
+        spend_cap: Spend cap in cents.
+    
+    Returns:
+        Dict with 'id' of the created campaign.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{act_id}/campaigns"
+    data = {
+        'access_token': access_token,
+        'name': name,
+        'objective': objective,
+        'status': status,
+        'special_ad_categories': json.dumps(special_ad_categories or ['NONE'])
+    }
+    if daily_budget is not None:
+        data['daily_budget'] = daily_budget
+    if lifetime_budget is not None:
+        data['lifetime_budget'] = lifetime_budget
+    if bid_strategy:
+        data['bid_strategy'] = bid_strategy
+    if buying_type:
+        data['buying_type'] = buying_type
+    if start_time:
+        data['start_time'] = start_time
+    if stop_time:
+        data['stop_time'] = stop_time
+    if spend_cap is not None:
+        data['spend_cap'] = spend_cap
+    return _make_graph_api_post(url, data)
+
+
+@mcp.tool()
+def update_campaign(
+    campaign_id: str,
+    name: Optional[str] = None,
+    status: Optional[str] = None,
+    daily_budget: Optional[int] = None,
+    lifetime_budget: Optional[int] = None,
+    bid_strategy: Optional[str] = None,
+    spend_cap: Optional[int] = None,
+    start_time: Optional[str] = None,
+    stop_time: Optional[str] = None
+) -> Dict:
+    """⚠️ WRITE OPERATION — Update an existing Facebook ad campaign.
+
+    Use this to change campaign name, status (pause/activate), budget, etc.
+    Only provided parameters will be updated.
+    
+    Args:
+        campaign_id: Campaign ID to update.
+        name: New campaign name.
+        status: New status. Options: 'ACTIVE', 'PAUSED', 'DELETED', 'ARCHIVED'.
+        daily_budget: New daily budget in cents.
+        lifetime_budget: New lifetime budget in cents.
+        bid_strategy: New bid strategy.
+        spend_cap: New spend cap in cents.
+        start_time: New start time in ISO 8601 format.
+        stop_time: New stop time in ISO 8601 format.
+    
+    Returns:
+        Dict with 'success': true if updated.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{campaign_id}"
+    data = {'access_token': access_token}
+    if name:
+        data['name'] = name
+    if status:
+        data['status'] = status
+    if daily_budget is not None:
+        data['daily_budget'] = daily_budget
+    if lifetime_budget is not None:
+        data['lifetime_budget'] = lifetime_budget
+    if bid_strategy:
+        data['bid_strategy'] = bid_strategy
+    if spend_cap is not None:
+        data['spend_cap'] = spend_cap
+    if start_time:
+        data['start_time'] = start_time
+    if stop_time:
+        data['stop_time'] = stop_time
+    return _make_graph_api_post(url, data)
+
+
+@mcp.tool()
+def create_adset(
+    act_id: str,
+    name: str,
+    campaign_id: str,
+    optimization_goal: str,
+    billing_event: str,
+    targeting: Dict,
+    status: str = 'PAUSED',
+    daily_budget: Optional[int] = None,
+    lifetime_budget: Optional[int] = None,
+    bid_amount: Optional[int] = None,
+    bid_strategy: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    promoted_object: Optional[Dict] = None,
+    destination_type: Optional[str] = None
+) -> Dict:
+    """⚠️ WRITE OPERATION — Create a new Facebook ad set.
+
+    Creates an ad set with targeting, budget, and optimization settings.
+    Created PAUSED by default for safety.
+    
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        name: Ad set name.
+        campaign_id: Parent campaign ID.
+        optimization_goal: Goal to optimize. Options: 'REACH', 'IMPRESSIONS', 'LINK_CLICKS',
+            'OFFSITE_CONVERSIONS', 'LEAD_GENERATION', 'APP_INSTALLS', 'VALUE', 'THRUPLAY',
+            'LANDING_PAGE_VIEWS', 'POST_ENGAGEMENT', 'PAGE_LIKES', 'QUALITY_LEAD'.
+        billing_event: When to bill. Options: 'IMPRESSIONS', 'LINK_CLICKS', 'THRUPLAY'.
+        targeting: Targeting specification dict. Must include at least geo_locations.
+            Example: {"geo_locations": {"countries": ["BR"]}, "age_min": 18, "age_max": 65}
+        status: Initial status. Default: 'PAUSED'.
+        daily_budget: Daily budget in cents. Either this or lifetime_budget is required.
+        lifetime_budget: Lifetime budget in cents.
+        bid_amount: Bid amount in cents (for BID_CAP strategy).
+        bid_strategy: Bid strategy override.
+        start_time: Start time in ISO 8601 format.
+        end_time: End time in ISO 8601 (required for lifetime_budget).
+        promoted_object: Object to promote (e.g., {"page_id": "123"} or {"pixel_id": "456", "custom_event_type": "PURCHASE"}).
+        destination_type: Destination type (e.g., 'WEBSITE', 'APP', 'MESSENGER').
+    
+    Returns:
+        Dict with 'id' of the created ad set.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{act_id}/adsets"
+    data = {
+        'access_token': access_token,
+        'name': name,
+        'campaign_id': campaign_id,
+        'optimization_goal': optimization_goal,
+        'billing_event': billing_event,
+        'targeting': json.dumps(targeting),
+        'status': status
+    }
+    if daily_budget is not None:
+        data['daily_budget'] = daily_budget
+    if lifetime_budget is not None:
+        data['lifetime_budget'] = lifetime_budget
+    if bid_amount is not None:
+        data['bid_amount'] = bid_amount
+    if bid_strategy:
+        data['bid_strategy'] = bid_strategy
+    if start_time:
+        data['start_time'] = start_time
+    if end_time:
+        data['end_time'] = end_time
+    if promoted_object:
+        data['promoted_object'] = json.dumps(promoted_object)
+    if destination_type:
+        data['destination_type'] = destination_type
+    return _make_graph_api_post(url, data)
+
+
+@mcp.tool()
+def update_adset(
+    adset_id: str,
+    name: Optional[str] = None,
+    status: Optional[str] = None,
+    daily_budget: Optional[int] = None,
+    lifetime_budget: Optional[int] = None,
+    targeting: Optional[Dict] = None,
+    bid_amount: Optional[int] = None,
+    bid_strategy: Optional[str] = None,
+    optimization_goal: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None
+) -> Dict:
+    """⚠️ WRITE OPERATION — Update an existing Facebook ad set.
+
+    Use this to change targeting, budget, status, schedule, etc.
+    Only provided parameters will be updated.
+    
+    Args:
+        adset_id: Ad set ID.
+        name: New name.
+        status: New status. Options: 'ACTIVE', 'PAUSED', 'DELETED', 'ARCHIVED'.
+        daily_budget: New daily budget in cents.
+        lifetime_budget: New lifetime budget in cents.
+        targeting: New targeting spec dict.
+        bid_amount: New bid amount in cents.
+        bid_strategy: New bid strategy.
+        optimization_goal: New optimization goal.
+        start_time: New start time in ISO 8601.
+        end_time: New end time in ISO 8601.
+    
+    Returns:
+        Dict with 'success': true if updated.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{adset_id}"
+    data = {'access_token': access_token}
+    if name:
+        data['name'] = name
+    if status:
+        data['status'] = status
+    if daily_budget is not None:
+        data['daily_budget'] = daily_budget
+    if lifetime_budget is not None:
+        data['lifetime_budget'] = lifetime_budget
+    if targeting:
+        data['targeting'] = json.dumps(targeting)
+    if bid_amount is not None:
+        data['bid_amount'] = bid_amount
+    if bid_strategy:
+        data['bid_strategy'] = bid_strategy
+    if optimization_goal:
+        data['optimization_goal'] = optimization_goal
+    if start_time:
+        data['start_time'] = start_time
+    if end_time:
+        data['end_time'] = end_time
+    return _make_graph_api_post(url, data)
+
+
+@mcp.tool()
+def create_ad(
+    act_id: str,
+    name: str,
+    adset_id: str,
+    creative: Dict,
+    status: str = 'PAUSED',
+    tracking_specs: Optional[List[Dict]] = None,
+    conversion_domain: Optional[str] = None
+) -> Dict:
+    """⚠️ WRITE OPERATION — Create a new Facebook ad.
+
+    Creates an ad linking a creative to an ad set. Created PAUSED by default.
+    
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        name: Ad name.
+        adset_id: Parent ad set ID.
+        creative: Creative specification. Either reference an existing creative with
+            {"creative_id": "123"} or provide inline spec with object_story_spec.
+        status: Initial status. Default: 'PAUSED'.
+        tracking_specs: Tracking specifications for conversions.
+        conversion_domain: Domain for conversion tracking.
+    
+    Returns:
+        Dict with 'id' of the created ad.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{act_id}/ads"
+    data = {
+        'access_token': access_token,
+        'name': name,
+        'adset_id': adset_id,
+        'creative': json.dumps(creative),
+        'status': status
+    }
+    if tracking_specs:
+        data['tracking_specs'] = json.dumps(tracking_specs)
+    if conversion_domain:
+        data['conversion_domain'] = conversion_domain
+    return _make_graph_api_post(url, data)
+
+
+@mcp.tool()
+def update_ad(
+    ad_id: str,
+    name: Optional[str] = None,
+    status: Optional[str] = None,
+    creative: Optional[Dict] = None,
+    tracking_specs: Optional[List[Dict]] = None
+) -> Dict:
+    """⚠️ WRITE OPERATION — Update an existing Facebook ad.
+
+    Use this to change ad name, status (pause/activate), or creative.
+    Only provided parameters will be updated.
+    
+    Args:
+        ad_id: Ad ID to update.
+        name: New ad name.
+        status: New status. Options: 'ACTIVE', 'PAUSED', 'DELETED', 'ARCHIVED'.
+        creative: New creative spec (e.g., {"creative_id": "123"}).
+        tracking_specs: New tracking specifications.
+    
+    Returns:
+        Dict with 'success': true if updated.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{ad_id}"
+    data = {'access_token': access_token}
+    if name:
+        data['name'] = name
+    if status:
+        data['status'] = status
+    if creative:
+        data['creative'] = json.dumps(creative)
+    if tracking_specs:
+        data['tracking_specs'] = json.dumps(tracking_specs)
+    return _make_graph_api_post(url, data)
+
+
+@mcp.tool()
+def create_ad_creative(
+    act_id: str,
+    name: str,
+    object_story_spec: Optional[Dict] = None,
+    asset_feed_spec: Optional[Dict] = None,
+    url_tags: Optional[str] = None,
+    call_to_action_type: Optional[str] = None,
+    image_hash: Optional[str] = None,
+    image_url: Optional[str] = None,
+    video_id: Optional[str] = None,
+    link_url: Optional[str] = None,
+    title: Optional[str] = None,
+    body: Optional[str] = None
+) -> Dict:
+    """⚠️ WRITE OPERATION — Create a new Facebook ad creative.
+
+    Creates a creative with image/video, text, and CTA. Use object_story_spec for
+    feed ads or asset_feed_spec for dynamic creative.
+    
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        name: Creative name.
+        object_story_spec: Page post spec for the creative. Example:
+            {"page_id": "123", "link_data": {"link": "https://example.com",
+            "message": "Check this out!", "image_hash": "abc123"}}
+        asset_feed_spec: For dynamic creative optimization with multiple assets.
+        url_tags: UTM parameters to append to URLs (e.g., 'utm_source=facebook').
+        call_to_action_type: CTA button type. Options: 'LEARN_MORE', 'SHOP_NOW',
+            'SIGN_UP', 'BOOK_TRAVEL', 'CONTACT_US', 'DOWNLOAD', 'GET_OFFER',
+            'GET_QUOTE', 'SUBSCRIBE', 'WATCH_MORE', 'APPLY_NOW'.
+        image_hash: Hash of previously uploaded image.
+        image_url: URL of image to use.
+        video_id: ID of previously uploaded video.
+        link_url: Destination URL.
+        title: Ad headline text.
+        body: Ad body text.
+    
+    Returns:
+        Dict with 'id' of the created creative.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{act_id}/adcreatives"
+    data = {
+        'access_token': access_token,
+        'name': name
+    }
+    if object_story_spec:
+        data['object_story_spec'] = json.dumps(object_story_spec)
+    if asset_feed_spec:
+        data['asset_feed_spec'] = json.dumps(asset_feed_spec)
+    if url_tags:
+        data['url_tags'] = url_tags
+    if call_to_action_type:
+        data['call_to_action_type'] = call_to_action_type
+    if image_hash:
+        data['image_hash'] = image_hash
+    if image_url:
+        data['image_url'] = image_url
+    if video_id:
+        data['video_id'] = video_id
+    if link_url:
+        data['link_url'] = link_url
+    if title:
+        data['title'] = title
+    if body:
+        data['body'] = body
+    return _make_graph_api_post(url, data)
+
+
+@mcp.tool()
+def delete_object(
+    object_id: str
+) -> Dict:
+    """⚠️ WRITE OPERATION — Delete/archive a Facebook ads object.
+
+    Archives campaigns, ad sets, ads, or creatives. This is a soft delete (archive).
+    
+    Args:
+        object_id: ID of the object to delete (campaign, ad set, ad, or creative ID).
+    
+    Returns:
+        Dict with 'success': true if deleted/archived.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{object_id}"
+    params = {'access_token': access_token}
+    return _make_graph_api_delete(url, params)
+
+
+# --- Media Tools ---
+
+@mcp.tool()
+def upload_ad_image(
+    act_id: str,
+    image_url: str,
+    name: Optional[str] = None
+) -> Dict:
+    """⚠️ WRITE OPERATION — Upload an image to the ad account library via URL.
+
+    Uploads an image from a URL to be used in ad creatives. Returns the image hash
+    needed for creating creatives.
+    
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        image_url: Public URL of the image to upload.
+        name: Optional name for the image in the library.
+    
+    Returns:
+        Dict with image details including 'hash', 'url', 'width', 'height'.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{act_id}/adimages"
+    data = {
+        'access_token': access_token,
+        'url': image_url
+    }
+    if name:
+        data['name'] = name
+    return _make_graph_api_post(url, data)
+
+
+@mcp.tool()
+def list_ad_images(
+    act_id: str,
+    fields: Optional[List[str]] = None,
+    limit: Optional[int] = 25,
+    after: Optional[str] = None,
+    before: Optional[str] = None,
+    hashes: Optional[List[str]] = None
+) -> Dict:
+    """List images in an ad account's image library.
+
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        fields: Fields to retrieve. Common: 'id', 'hash', 'name', 'url',
+            'width', 'height', 'created_time', 'status', 'permalink_url'.
+        limit: Max results per page. Default: 25.
+        after: Pagination cursor.
+        before: Pagination cursor.
+        hashes: Filter by specific image hashes.
+    
+    Returns:
+        Dict with 'data' list of image objects.
+    """
+    params = {}
+    if hashes:
+        params['hashes'] = json.dumps(hashes)
+    return _fetch_edge(
+        parent_id=act_id,
+        edge_name='adimages',
+        fields=fields,
+        limit=limit,
+        after=after,
+        before=before,
+        **params
+    )
+
+
+@mcp.tool()
+def upload_ad_video(
+    act_id: str,
+    file_url: str,
+    name: Optional[str] = None,
+    title: Optional[str] = None,
+    description: Optional[str] = None
+) -> Dict:
+    """⚠️ WRITE OPERATION — Upload a video to the ad account library via URL.
+
+    Uploads a video from a URL to be used in ad creatives.
+    
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        file_url: Public URL of the video to upload.
+        name: Name for the video in the library.
+        title: Video title.
+        description: Video description.
+    
+    Returns:
+        Dict with video details including 'id'.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{act_id}/advideos"
+    data = {
+        'access_token': access_token,
+        'file_url': file_url
+    }
+    if name:
+        data['name'] = name
+    if title:
+        data['title'] = title
+    if description:
+        data['description'] = description
+    return _make_graph_api_post(url, data)
+
+
+@mcp.tool()
+def list_ad_videos(
+    act_id: str,
+    fields: Optional[List[str]] = None,
+    limit: Optional[int] = 25,
+    after: Optional[str] = None,
+    before: Optional[str] = None
+) -> Dict:
+    """List videos in an ad account's video library.
+
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        fields: Fields to retrieve. Common: 'id', 'title', 'description',
+            'source', 'picture', 'created_time', 'updated_time', 'length'.
+        limit: Max results per page. Default: 25.
+        after: Pagination cursor.
+        before: Pagination cursor.
+    
+    Returns:
+        Dict with 'data' list of video objects.
+    """
+    return _fetch_edge(
+        parent_id=act_id,
+        edge_name='advideos',
+        fields=fields,
+        limit=limit,
+        after=after,
+        before=before
+    )
+
+
+# --- Ad Preview Tools ---
+
+@mcp.tool()
+def get_ad_preview(
+    creative_id: str,
+    ad_format: str = 'DESKTOP_FEED_STANDARD'
+) -> Dict:
+    """Get a preview of how an ad creative will look.
+
+    Generates an HTML preview of the ad creative in the specified format.
+    
+    Args:
+        creative_id: The ad creative ID to preview.
+        ad_format: Preview format. Options:
+            'DESKTOP_FEED_STANDARD', 'MOBILE_FEED_STANDARD', 'MOBILE_FEED_BASIC',
+            'RIGHT_COLUMN_STANDARD', 'INSTAGRAM_STANDARD', 'INSTAGRAM_STORY',
+            'MARKETPLACE_MOBILE', 'AUDIENCE_NETWORK_OUTSTREAM_VIDEO',
+            'INSTANT_ARTICLE_STANDARD', 'MESSENGER_MOBILE_INBOX_MEDIA'.
+    
+    Returns:
+        Dict with 'data' containing preview HTML in 'body' field.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{creative_id}/previews"
+    params = {
+        'access_token': access_token,
+        'ad_format': ad_format
+    }
+    return _make_graph_api_call(url, params)
+
+
+# --- Audience Management Tools ---
+
+@mcp.tool()
+def create_custom_audience(
+    act_id: str,
+    name: str,
+    subtype: str = 'CUSTOM',
+    description: Optional[str] = None,
+    customer_file_source: Optional[str] = None
+) -> Dict:
+    """⚠️ WRITE OPERATION — Create a custom audience for retargeting.
+
+    Creates a blank custom audience that can be populated with users later.
+    
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        name: Audience name.
+        subtype: Audience subtype. Options: 'CUSTOM', 'WEBSITE', 'APP', 'OFFLINE_CONVERSION',
+            'ENGAGEMENT', 'VIDEO'. Default: 'CUSTOM'.
+        description: Description of the audience.
+        customer_file_source: Source of customer data. Options: 'USER_PROVIDED_ONLY',
+            'PARTNER_PROVIDED_ONLY', 'BOTH_USER_AND_PARTNER_PROVIDED'.
+    
+    Returns:
+        Dict with 'id' of the created audience.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{act_id}/customaudiences"
+    data = {
+        'access_token': access_token,
+        'name': name,
+        'subtype': subtype
+    }
+    if description:
+        data['description'] = description
+    if customer_file_source:
+        data['customer_file_source'] = customer_file_source
+    return _make_graph_api_post(url, data)
+
+
+@mcp.tool()
+def update_custom_audience_users(
+    audience_id: str,
+    schema: List[str],
+    data_list: List[List[str]],
+    action: str = 'add'
+) -> Dict:
+    """⚠️ WRITE OPERATION — Add or remove users from a custom audience.
+
+    Adds/removes hashed user data to/from a custom audience.
+    Data must be SHA256 hashed before sending (except for phone numbers and emails
+    which should be lowercase and trimmed then hashed).
+    
+    Args:
+        audience_id: Custom audience ID.
+        schema: Schema of the data columns. Options: 'EMAIL', 'PHONE', 'FN' (first name),
+            'LN' (last name), 'ZIP', 'CT' (city), 'ST' (state), 'COUNTRY', 'DOBY' (birth year),
+            'DOBM' (birth month), 'DOBD' (birth day), 'GEN' (gender), 'EXTERN_ID'.
+        data_list: List of user records. Each record is a list matching the schema.
+            All PII values must be SHA256 hashed.
+        action: 'add' to add users, 'remove' to remove users. Default: 'add'.
+    
+    Returns:
+        Dict with 'audience_id' and 'num_received', 'num_invalid_entries'.
+    """
+    access_token = _get_fb_access_token()
+    endpoint = 'users' if action == 'add' else 'users'
+    url = f"{FB_GRAPH_URL}/{audience_id}/{endpoint}"
+    payload = {
+        'schema': schema,
+        'data': data_list
+    }
+    data = {
+        'access_token': access_token,
+        'payload': json.dumps(payload)
+    }
+    if action == 'remove':
+        # For removal, we use DELETE method conceptually but Meta uses POST with session
+        data['method'] = 'DELETE'
+    return _make_graph_api_post(url, data)
+
+
+@mcp.tool()
+def create_lookalike_audience(
+    act_id: str,
+    name: str,
+    origin_audience_id: str,
+    lookalike_spec: Dict
+) -> Dict:
+    """⚠️ WRITE OPERATION — Create a lookalike audience based on a source audience.
+
+    Creates a new audience of people similar to your existing custom audience.
+    
+    Args:
+        act_id: Ad account ID (e.g., 'act_1234567890').
+        name: Name for the lookalike audience.
+        origin_audience_id: Source custom audience ID to base the lookalike on.
+        lookalike_spec: Lookalike configuration. Example:
+            {"type": "similarity", "country": "BR", "ratio": 0.01}
+            or {"type": "similarity", "country": "BR", "starting_ratio": 0.0, "ratio": 0.02}
+            ratio values: 0.01 = 1% (most similar), 0.10 = 10% (broader reach).
+    
+    Returns:
+        Dict with 'id' of the created lookalike audience.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{act_id}/customaudiences"
+    data = {
+        'access_token': access_token,
+        'name': name,
+        'subtype': 'LOOKALIKE',
+        'origin_audience_id': origin_audience_id,
+        'lookalike_spec': json.dumps(lookalike_spec)
+    }
+    return _make_graph_api_post(url, data)
+
+
+@mcp.tool()
+def delete_audience(
+    audience_id: str
+) -> Dict:
+    """⚠️ WRITE OPERATION — Delete a custom or lookalike audience.
+
+    Permanently removes the audience. This action cannot be undone.
+    
+    Args:
+        audience_id: ID of the custom or lookalike audience to delete.
+    
+    Returns:
+        Dict with 'success': true if deleted.
+    """
+    access_token = _get_fb_access_token()
+    url = f"{FB_GRAPH_URL}/{audience_id}"
+    params = {'access_token': access_token}
+    return _make_graph_api_delete(url, params)
+
+
 if __name__ == "__main__":
     _get_fb_access_token()
     mcp.run(transport='stdio')
-    

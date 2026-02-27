@@ -1,2 +1,17 @@
+# Ambientes Virtuais
+venv/
+.venv/
+env/
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Configurações e Logs
+.env
+*.log
+*.sqlite3
+
+# Dependências de libs antigas se houver
 lib/
-facebook-ads-mcp-server.dxt

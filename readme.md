@@ -1,151 +1,123 @@
 # Facebook/Meta Ads MCP Server
 
-[![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/gomarble-ai/facebook-ads-mcp-server)](https://archestra.ai/mcp-catalog/gomarble-ai__facebook-ads-mcp-server)
-[![smithery badge](https://smithery.ai/badge/@gomarble-ai/facebook-ads-mcp-server)](https://smithery.ai/server/@gomarble-ai/facebook-ads-mcp-server)
+Este projeto fornece um servidor Model Context Protocol (MCP) que atua como uma interface completa para a API do Meta Ads. Ele permite que LLMs e agentes acessem dados programáticos e gerenciem ativamente campanhas, conjuntos de anúncios, criativos e audiências no Facebook e Instagram.
 
-This project provides an MCP server acting as an interface to the Meta Ads, enabling programmatic access to Meta Ads data and management features.
-
-<video controls width="1920" height="512" src="https://github.com/user-attachments/assets/c4a76dcf-cf5d-4a1d-b976-08165e880fe4">Your browser does not support the video tag.</video>
-
-## Easy One-Click Setup
-
-For a simpler setup experience, we offer ready-to-use installers:
-
-👉 **Download installer -** [https://gomarble.ai/mcp](https://gomarble.ai/mcp)
-
-## Join our community for help and updates
-
-👉 **Slack Community -** [AI in Ads](https://join.slack.com/t/ai-in-ads/shared_invite/zt-36hntbyf8-FSFixmwLb9mtEzVZhsToJQ)
-
-## Try Google ads mcp server also
-
-👉 **Google Ads MCP -** [Google Ads MCP](https://github.com/gomarble-ai/google-ads-mcp-server)
-
-### What It Does
-
-- Installs and configures the MCP server locally
-- Automatically handles environment setup
-- Prompts for Meta token authentication during the process which is optional
-- If Meta access token is not provided then connect to GoMarble's server to create the token on your behalf
-
-### Important Disclaimer
-
-This setup **does not require** you to manually obtain a Meta Developer Access Token.
-
-Instead, it connects securely to **GoMarble's server to create the token on your behalf**.
-GoMarble **does not store** your token — it is saved locally on your machine for use with the MCP server.
+> **Nota de Versão:** Este repositório é um fork evoluído do projeto original da `gomarble-ai`, agora expandido para suportar não apenas leitura (`Read-Only`), mas também operações avançadas de configuração, estimativa e escrita/CRUD (`Read/Write`).
 
 ---
 
-## Setup
+## 🚀 Funcionalidades Principais
 
-### Prerequisites
+O servidor foi atualizado e agora possui **mais de 45 ferramentas disponíveis**, cobrindo o ciclo completo de planejamento, criação e análise de campanhas:
 
-*   Python 3.10+
-*   Dependencies listed in `requirements.txt`
+- **Targeting Inteligente:** Busca sugestões de interesses, comportamentos, dados demográficos, e geolocalizações.
+- **Predição de Delivery:** Estimação em tempo real de alcance potencial (Reach) e leilão (CPA/CPM) baseado em orçamentos.
+- **Gestão de Campanhas (CRUD):** Crie, atualize, delete ou arquive Campaigns, Ad Sets e Ads via ferramentas MCP nativas.
+- **Gestão de Criativos & Mídia:** Upload de imagens e vídeos usando URLs; listagem de acervos da conta; geração de Iframes de preview do anúncio (`get_ad_preview`).
+- **Audiências Avançadas:** Criação nativa de Custom Audiences (base de clientes/CRM via e-mails com SHA-256 implícito) e Lookalike Audiences.
+- **Reporting e Insights:** Acesse dados robustos de performance de anúncios em qualquer nível com parâmetros configuráveis (ROAS, CPA, Cliques, etc).
 
+> ⚠️ **Operações de Escrita (WRITE OPERATIONS):** A nova suíte de endpoints permite deleção local e configurações no seu Meta AdsManager. Todos os endpoints construtivos criam objetos no estado `PAUSED` por segurança, a menos que especificado caso contrário pelo Agente.
 
+---
 
-1.  **(Optional but Recommended) Create and Activate a Virtual Environment:**
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-    ```
+## 💻 Setup Inicial
 
-    Using a virtual environment helps manage project dependencies cleanly[[Source]](https://docs.python.org/3/tutorial/venv.html).
-2.  **Install Dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-3.  **Obtain Meta Access Token:** Secure a Meta User Access Token with the necessary permissions (e.g., `ads_read`). You can generate this through the Meta Developer portal. Follow [this link](https://elfsight.com/blog/how-to-get-facebook-access-token/).
+### Pré-requisitos
 
-### Usage with MCP Clients (e.g., Cursor, Claude Desktop)
+* Python 3.10+
+- Token de Acesso da Meta API contendo permissões como `ads_read` e `ads_management`
 
-To integrate this server with an MCP-compatible client, add a configuration([Claude](https://modelcontextprotocol.io/quickstart/user#2-add-the-filesystem-mcp-server)) similar to the following. Replace `YOUR_META_ACCESS_TOKEN` with your actual token and adjust the path to `server.py` if necessary.
+### Instalação
+
+1. Clone o repositório e acesse a pasta do projeto.
+2. Crie um ambiente virtual para isolar as dependências e o SDK local:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+# ou no windows: venv\Scripts\activate
+```
+
+1. Instale os requerimentos:
+
+```bash
+pip install -r requirements.txt
+# Certifique-se também da instalação interna correta
+pip install mcp requests
+```
+
+---
+
+## 🛠️ Integrando ao Claude Desktop
+
+Para integrar aos clientes MCP padrão (como Cursor ou Claude Desktop), basta abrir o seu arquivo de configurações MCP (ex: `claude_desktop_config.json`) e inserir:
 
 ```json
 {
   "mcpServers": {
     "fb-ads-mcp-server": {
-      "command": "python",
+      "command": "/caminho/completo/para/venv/bin/python",
       "args": [
-        "/path/to/your/fb-ads-mcp-server/server.py",
+        "/caminho/completo/para/seu/server.py",
         "--fb-token",
-        "YOUR_META_ACCESS_TOKEN"
+        "SEU_META_ACCESS_TOKEN"
       ]
-      // If using a virtual environment, you might need to specify the python executable within the venv:
-      // "command": "/path/to/your/fb-ads-mcp-server/venv/bin/python",
-      // "args": [
-      //   "/path/to/your/fb-ads-mcp-server/server.py",
-      //   "--fb-token",
-      //   "YOUR_META_ACCESS_TOKEN"
-      // ]
     }
   }
 }
 ```
-Restart the MCP Client app after making the update in the configuration.
 
-*(Note: On Windows, you might need to adjust the command structure or use `cmd /k` depending on your setup.)*
+## 🤖 Integrando ao DROID CLI (Factory.ai)
 
-### Debugging the Server
+O DROID se benefícia grandemente de ferramentas MCP utilizando modo `stdio`. Abra ou edite o arquivo `~/.factory/mcp.json` e registre o Meta Ads Server.
 
-Execute `server.py`, providing the access token via the `--fb-token` argument.
+> Certifique-se de substituir e utilizar os **caminhos absolutos** do python da `venv` e do script `server.py`:
 
-```bash
-python server.py --fb-token YOUR_META_ACCESS_TOKEN
+```json
+{
+  "mcpServers": {
+    "meta-ads": {
+      "type": "stdio",
+      "command": "/Users/NAME/path/facebook-ads-mcp-server/venv/bin/python",
+      "args": [
+        "/Users/NAME/path/facebook-ads-mcp-server/server.py",
+        "--fb-token",
+        "SEU_META_ACCESS_TOKEN"
+      ],
+      "disabled": false
+    }
+  }
+}
 ```
 
-### Available MCP Tools
-
-This MCP server provides tools for interacting with META Ads objects and data:
-
-| Tool Name                       | Description                                              |
-| ------------------------------- | -------------------------------------------------------- |
-| **Account & Object Read**       |                                                          |
-| `list_ad_accounts`              | Lists ad accounts linked to the token.                   |
-| `get_details_of_ad_account`     | Retrieves details for a specific ad account.             |
-| `get_campaign_by_id`            | Retrieves details for a specific campaign.               |
-| `get_adset_by_id`               | Retrieves details for a specific ad set.                 |
-| `get_ad_by_id`                  | Retrieves details for a specific ad.                     |
-| `get_ad_creative_by_id`         | Retrieves details for a specific ad creative.            |
-| `get_adsets_by_ids`             | Retrieves details for multiple ad sets by their IDs.     |
-| **Fetching Collections**        |                                                          |
-| `get_campaigns_by_adaccount`    | Retrieves campaigns within an ad account.                |
-| `get_adsets_by_adaccount`       | Retrieves ad sets within an ad account.                  |
-| `get_ads_by_adaccount`          | Retrieves ads within an ad account.                      |
-| `get_adsets_by_campaign`        | Retrieves ad sets within a campaign.                     |
-| `get_ads_by_campaign`           | Retrieves ads within a campaign.                         |
-| `get_ads_by_adset`              | Retrieves ads within an ad set.                          |
-| `get_ad_creatives_by_ad_id`     | Retrieves creatives associated with an ad.               |
-| **Insights & Performance Data** |                                                          |
-| `get_adaccount_insights`        | Retrieves performance insights for an ad account.        |
-| `get_campaign_insights`         | Retrieves performance insights for a campaign.           |
-| `get_adset_insights`            | Retrieves performance insights for an ad set.            |
-| `get_ad_insights`               | Retrieves performance insights for an ad.                |
-| `fetch_pagination_url`          | Fetches data from a pagination URL (e.g., from insights).|
-| **Activity/Change History**     |                                                          |
-| `get_activities_by_adaccount`   | Retrieves change history for an ad account.              |
-| `get_activities_by_adset`       | Retrieves change history for an ad set.                  |
-
-*(Note: Most tools support additional parameters like `fields`, `filtering`, `limit`, pagination, date ranges, etc. Refer to the detailed docstrings within `server.py` for the full list and description of arguments for each tool.)*
-
-*(Note: If your Meta access token expires, you'll need to generate a new one and update the configuration file of the MCP Client with new token to continue using the tools.)*
-
-### Dependencies
-
-*   [mcp](https://pypi.org/project/mcp/) (>=1.6.0)
-*   [requests](https://pypi.org/project/requests/) (>=2.32.3)
-
-### License
-This project is licensed under the MIT License.
+Após essa configuração, apenas reinicie sua instância do DROID para que as ferramentas sejam catalogadas.
 
 ---
 
-## Installing via Smithery
+## 📚 Novas Ferramentas (Destaques da Atualização)
 
-To install Facebook Ads Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@gomarble-ai/facebook-ads-mcp-server):
+Aqui está uma prévia simplificada das novas ferramentas injetadas nos LLMs. (*Existem dezenas de ferramentas clássicas de Insights e Activity History também incluídas no script `server.py`*).
 
-```bash
-npx -y @smithery/cli install @gomarble-ai/facebook-ads-mcp-server --client claude
-```
+| Nova Ferramenta MCP             | Descrição                                                                 |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| **Planejamento de Públicos**      |                                                                           |
+| `search_interests` / `behaviors`  | Puxa opções de target para uso no payload da API e estimativa de tamanho. |
+| `get_delivery_estimate`           | Estima os custos CPA/CPM de um conjunto com base no target + orçamento.   |
+| **Criação & Edição**              |                                                                           |
+| `create_campaign`, `update_campaign`| Cria campanhas (ex: CONVERSIONS) de forma programática.                |
+| `create_adset`, `update_adset`    | Configura grupos de anúncios com o target_spec montado pelo Agente.       |
+| `create_ad`, `update_ad`          | Dispara os anúncios criativos.                                            |
+| `upload_ad_image`                 | Sobe criativo da Web para a biblioteca do seu gerenciador.                |
+| `delete_object`                   | Ferramenta universal de limpeza/arquivamento via Meta Node/ObjectId.      |
+| **CRM e Audiências**              |                                                                           |
+| `create_custom_audience`          | Cria um container para público personalizado (CRM/Base Interna).          |
+| `update_custom_audience_users`    | Processa e envia os dados (emails, phones) hashados para popular um Custom Audience. |
+| `create_lookalike_audience`       | Gera públicos semelhantes a partir de uma fonte prévia do site ou CRM.     |
+
+---
+
+## 📜 Licença
+
+Distribuído sob a Licença MIT.
+*Forked originalmente de Gomarble-AI.*
